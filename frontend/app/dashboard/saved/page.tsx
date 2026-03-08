@@ -21,7 +21,7 @@ export default function SavedPage() {
       .order('created_at', { ascending: false });
 
     const opps = (data ?? [])
-      .map((row: { opportunity_id: string; opportunities: Opportunity | null }) => row.opportunities)
+      .map((row: any) => row.opportunities as Opportunity | null)
       .filter(Boolean) as Opportunity[];
 
     setSaved(opps);
