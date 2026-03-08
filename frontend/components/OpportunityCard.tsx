@@ -1,15 +1,15 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Bookmark, BookmarkCheck, ExternalLink, TrendingUp, Clock, Shield, ChevronDown, Sparkles } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { Opportunity } from '@/types';
 
 const CATEGORY_CONFIG: Record<string, { color: string; bg: string; border: string; dot: string }> = {
-  'Sports Betting': { color: 'text-accent-orange', bg: 'bg-accent-orange/10', border: 'border-accent-orange/20', dot: 'bg-accent-orange' },
-  'Crypto Arbitrage': { color: 'text-accent-blue', bg: 'bg-accent-blue/10', border: 'border-accent-blue/20', dot: 'bg-accent-blue' },
-  'Product Reselling': { color: 'text-accent-purple', bg: 'bg-accent-purple/10', border: 'border-accent-purple/20', dot: 'bg-accent-purple' },
-  'Price Mistakes': { color: 'text-accent-red', bg: 'bg-accent-red/10', border: 'border-accent-red/20', dot: 'bg-accent-red' },
-  'Discounts': { color: 'text-accent-yellow', bg: 'bg-accent-yellow/10', border: 'border-accent-yellow/20', dot: 'bg-accent-yellow' },
+  'Sports Betting':    { color: 'text-accent-orange', bg: 'bg-accent-orange/10', border: 'border-accent-orange/20', dot: 'bg-accent-orange' },
+  'Crypto Arbitrage':  { color: 'text-accent-blue',   bg: 'bg-accent-blue/10',   border: 'border-accent-blue/20',   dot: 'bg-accent-blue' },
+  'Product Reselling': { color: 'text-accent-purple',  bg: 'bg-accent-purple/10', border: 'border-accent-purple/20', dot: 'bg-accent-purple' },
+  'Price Mistakes':    { color: 'text-accent-red',     bg: 'bg-accent-red/10',    border: 'border-accent-red/20',    dot: 'bg-accent-red' },
+  'Discounts':         { color: 'text-accent-yellow',  bg: 'bg-accent-yellow/10', border: 'border-accent-yellow/20', dot: 'bg-accent-yellow' },
 };
 
 function ConfidenceBar({ score }: { score: number }) {
@@ -23,13 +23,31 @@ function ConfidenceBar({ score }: { score: number }) {
         <span className="text-xs font-mono font-bold" style={{ color }}>{score}</span>
       </div>
       <div className="h-1 bg-bg-secondary rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-1000"
-          style={{ width: `${score}%`, backgroundColor: color }}
-        />
+        <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${score}%`, backgroundColor: color }} />
       </div>
     </div>
   );
+}
+
+// Fallback explanations if not stored on the opportunity
+function getFallbackExplanation(opp: Opportunity): string {
+  const meta = (opp as any).metadata || {};
+  switch (opp.category) {
+    case 'Sports Betting':
+      if (meta.type === 'arbitrage') return `By placing bets on both sides across ${meta.bookA} and ${meta.bookB}, the differing odds create a mathematical guarantee of profit regardless of the result. The bookmakers have priced the same game differently, leaving a gap you can exploit before they correct it.`;
+      if (meta.type === 'over_under') return `Over/Under bets profit when you correctly predict the combined scoring output of a game. Current odds and recent form strongly point toward the ${meta.direction}, making this a high-value play at the current line.`;
+      return `This prediction is based on live odds data showing a statistical edge. The model identified a pricing discrepancy that makes this bet more likely to win than the odds suggest, creating positive expected value.`;
+    case 'Crypto Arbitrage':
+      return `${meta.pair || 'This crypto pair'} is priced differently across exchanges due to varying liquidity. Buying on the cheaper exchange and selling on the more expensive one captures the spread as profit. These gaps typically close within minutes as bots detect them.`;
+    case 'Product Reselling':
+      return `This product is currently priced below its true market value. Resellers profit by purchasing at this discounted price and listing on secondary marketplaces like eBay or StockX where demand keeps prices higher.`;
+    case 'Price Mistakes':
+      return `A pricing error means the retailer accidentally listed this far below its actual value. Buyers can purchase at the error price before it is corrected — many retailers honour these orders once placed.`;
+    case 'Discounts':
+      return `This item is currently ${meta.discountPct ? meta.discountPct + '%' : 'significantly'} below its normal retail price. The profit opportunity comes from savings versus paying full price, or buying to resell closer to the standard retail price.`;
+    default:
+      return `Breaking news can move markets before prices fully adjust. Acting early gives you an edge before the broader market prices in the new information.`;
+  }
 }
 
 interface Props {
@@ -42,83 +60,26 @@ interface Props {
 export default function OpportunityCard({ opportunity, isSaved, onToggleSave, isNew }: Props) {
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [explanation, setExplanation] = useState<string>('');
-  const [loadingExplanation, setLoadingExplanation] = useState(false);
-  const explanationCache = useRef<string>('');
-
   const cfg = CATEGORY_CONFIG[opportunity.category] ?? CATEGORY_CONFIG['Discounts'];
 
   const handleSave = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // prevent card expand when clicking bookmark
+    e.stopPropagation();
     setSaving(true);
     await onToggleSave(opportunity.id);
     setSaving(false);
   };
 
-  const handleSourceClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // prevent card expand when clicking source link
-  };
+  const handleSourceClick = (e: React.MouseEvent) => e.stopPropagation();
 
-  const handleCardClick = async () => {
-    const nowExpanded = !expanded;
-    setExpanded(nowExpanded);
-
-    // Only fetch if expanding and we don't have a cached explanation
-    if (nowExpanded && !explanationCache.current) {
-      setLoadingExplanation(true);
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
-            system: `You are a concise financial analyst assistant for OpportunityScanner, an app that surfaces profitable opportunities. 
-When given an opportunity, explain in exactly 2-3 sentences why it is profitable and what makes it a good opportunity right now. 
-Be specific, use the numbers provided, and write in plain English that anyone can understand. 
-Do not use bullet points. Do not start with "This is" or "This opportunity". Be direct and insightful.`,
-            messages: [
-              {
-                role: 'user',
-                content: `Explain why this opportunity is profitable:
-
-Title: ${opportunity.title}
-Category: ${opportunity.category}
-Description: ${opportunity.description}
-Estimated Profit: $${opportunity.estimated_profit}
-Confidence Score: ${opportunity.confidence_score}/100
-Source: ${opportunity.source}`,
-              },
-            ],
-          }),
-        });
-
-        const data = await response.json();
-        const text = data.content?.[0]?.text ?? 'Unable to generate explanation.';
-        explanationCache.current = text;
-        setExplanation(text);
-      } catch (err) {
-        explanationCache.current = 'Unable to generate explanation right now.';
-        setExplanation('Unable to generate explanation right now.');
-      } finally {
-        setLoadingExplanation(false);
-      }
-    } else if (nowExpanded && explanationCache.current) {
-      // Use cached version
-      setExplanation(explanationCache.current);
-    }
-  };
+  // Use stored explanation if available, otherwise use fallback template
+  const explanation = (opportunity as any).explanation || getFallbackExplanation(opportunity);
 
   const profit = opportunity.estimated_profit;
-  const profitStr = profit >= 1000
-    ? `$${(profit / 1000).toFixed(1)}K`
-    : `$${profit.toFixed(0)}`;
+  const profitStr = profit >= 1000 ? `$${(profit / 1000).toFixed(1)}K` : `$${profit.toFixed(0)}`;
 
   return (
     <div
-      onClick={handleCardClick}
+      onClick={() => setExpanded(!expanded)}
       className={`
         opportunity-card bg-bg-card border rounded-xl p-5 relative overflow-hidden cursor-pointer
         transition-all duration-200
@@ -129,9 +90,7 @@ Source: ${opportunity.source}`,
       {/* New badge */}
       {isNew && (
         <div className="absolute top-3 right-3">
-          <span className="bg-accent-green text-bg-primary text-xs font-mono font-bold px-2 py-0.5 rounded-full badge-pulse">
-            NEW
-          </span>
+          <span className="bg-accent-green text-bg-primary text-xs font-mono font-bold px-2 py-0.5 rounded-full badge-pulse">NEW</span>
         </div>
       )}
 
@@ -144,9 +103,7 @@ Source: ${opportunity.source}`,
           </span>
         </div>
         <div className="text-right flex-shrink-0">
-          <div className="text-accent-green font-display font-bold text-2xl glow-green leading-tight">
-            {profitStr}
-          </div>
+          <div className="text-accent-green font-display font-bold text-2xl glow-green leading-tight">{profitStr}</div>
           <div className="text-text-muted text-xs font-mono">est. profit</div>
         </div>
       </div>
@@ -161,7 +118,7 @@ Source: ${opportunity.source}`,
         {opportunity.description}
       </p>
 
-      {/* AI Explanation — shown when expanded */}
+      {/* Why This Is Profitable — shown when expanded, instant (no loading) */}
       {expanded && (
         <div className="mb-4 rounded-lg border border-accent-green/20 bg-accent-green/5 p-4">
           <div className="flex items-center gap-1.5 mb-2">
@@ -170,17 +127,7 @@ Source: ${opportunity.source}`,
               Why This Is Profitable
             </span>
           </div>
-          {loadingExplanation ? (
-            <div className="space-y-2">
-              <div className="skeleton h-3 w-full rounded" />
-              <div className="skeleton h-3 w-5/6 rounded" />
-              <div className="skeleton h-3 w-4/6 rounded" />
-            </div>
-          ) : (
-            <p className="text-text-secondary text-sm leading-relaxed">
-              {explanation}
-            </p>
-          )}
+          <p className="text-text-secondary text-sm leading-relaxed">{explanation}</p>
         </div>
       )}
 
@@ -190,10 +137,7 @@ Source: ${opportunity.source}`,
       {/* Bottom row */}
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-border-dim">
         <div className="flex items-center gap-3 text-xs text-text-muted font-mono">
-          <span className="flex items-center gap-1">
-            <TrendingUp size={11} />
-            {opportunity.source}
-          </span>
+          <span className="flex items-center gap-1"><TrendingUp size={11} />{opportunity.source}</span>
           <span className="flex items-center gap-1">
             <Clock size={11} />
             {formatDistanceToNow(new Date(opportunity.created_at), { addSuffix: true })}
