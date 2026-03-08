@@ -6,9 +6,10 @@ import type { Opportunity } from '@/types';
 import { RefreshCw, Filter, TrendingUp, Zap, Activity } from 'lucide-react';
 
 const CATEGORIES = ['All', 'Sports Betting', 'Crypto Arbitrage', 'Product Reselling', 'Price Mistakes', 'Discounts'];
+const REGIONS = ['All', 'Global', 'US', 'UK', 'EU', 'Asia', 'Australia', 'Canada', 'Nigeria'];
 const SORT_OPTIONS = [
-  { value: 'newest', label: 'Newest First' },
-  { value: 'profit', label: 'Highest Profit' },
+  { value: 'newest',     label: 'Newest First' },
+  { value: 'profit',     label: 'Highest Profit' },
   { value: 'confidence', label: 'Best Confidence' },
 ];
 
@@ -35,39 +36,30 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [category, setCategory] = useState('All');
+  const [region, setRegion] = useState('All');
   const [sort, setSort] = useState('newest');
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState({ total: 0, avgProfit: 0, avgConfidence: 0 });
   const pollRef = useRef<ReturnType<typeof setInterval>>();
   const prevIdsRef = useRef<Set<string>>(new Set());
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
   const fetchOpportunities = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const params = new URLSearchParams();
-      if (category !== 'All') params.set('category', category);
-      params.set('sort', sort);
-      params.set('limit', '50');
+      let query = supabase
+        .from('opportunities')
+        .select('*')
+        .order(
+          sort === 'profit' ? 'estimated_profit' : sort === 'confidence' ? 'confidence_score' : 'created_at',
+          { ascending: false }
+        )
+        .limit(50);
 
-      const url = null;
-      let data: Opportunity[] = [];
+      if (category !== 'All') query = query.eq('category', category);
+      if (region !== 'All') query = query.eq('region', region);
 
-      if (url) {
-        const res = await fetch(url);
-        if (res.ok) data = await res.json();
-      } else {
-        // Fallback: fetch from Supabase directly
-        let query = supabase
-          .from('opportunities')
-          .select('*')
-          .order(sort === 'profit' ? 'estimated_profit' : sort === 'confidence' ? 'confidence_score' : 'created_at', { ascending: false })
-          .limit(50);
-        if (category !== 'All') query = query.eq('category', category);
-        const { data: rows } = await query;
-        data = rows ?? [];
-      }
+      const { data: rows } = await query;
+      const data: Opportunity[] = rows ?? [];
 
       // Detect new items
       const currentIds = new Set(data.map((o: Opportunity) => o.id));
@@ -84,13 +76,11 @@ export default function DashboardPage() {
       }
 
       setOpportunities(data);
-
-      // Stats
       if (data.length > 0) {
         setStats({
           total: data.length,
-          avgProfit: data.reduce((s: number, o: Opportunity) => s + o.estimated_profit, 0) / data.length,
-          avgConfidence: data.reduce((s: number, o: Opportunity) => s + o.confidence_score, 0) / data.length,
+          avgProfit: data.reduce((s, o) => s + o.estimated_profit, 0) / data.length,
+          avgConfidence: data.reduce((s, o) => s + o.confidence_score, 0) / data.length,
         });
       }
     } catch (err) {
@@ -99,7 +89,7 @@ export default function DashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [category, sort, API_URL]);
+  }, [category, region, sort]);
 
   const fetchSaved = useCallback(async (uid: string) => {
     const { data } = await supabase
@@ -147,7 +137,7 @@ export default function DashboardPage() {
             LIVE FEED
             {refreshing && <RefreshCw size={16} className="animate-spin text-text-muted" />}
           </h1>
-          <p className="text-text-muted text-sm font-mono mt-0.5">Auto-refreshes every 30 seconds</p>
+          <p className="text-text-muted text-sm font-mono mt-0.5">Auto-refreshes every 30 seconds · Click any card to expand</p>
         </div>
         <button
           onClick={() => fetchOpportunities()}
@@ -158,52 +148,58 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       {!loading && opportunities.length > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { icon: <Zap size={14} />, label: 'Found', value: stats.total, suffix: '' },
-            { icon: <TrendingUp size={14} />, label: 'Avg Profit', value: `$${stats.avgProfit.toFixed(0)}`, suffix: '' },
-            { icon: <Activity size={14} />, label: 'Avg Score', value: `${stats.avgConfidence.toFixed(0)}`, suffix: '/100' },
+            { icon: <Zap size={14} />, label: 'Found', value: String(stats.total) },
+            { icon: <TrendingUp size={14} />, label: 'Avg Profit', value: `$${stats.avgProfit.toFixed(0)}` },
+            { icon: <Activity size={14} />, label: 'Avg Score', value: `${stats.avgConfidence.toFixed(0)}/100` },
           ].map((s, i) => (
             <div key={i} className="bg-bg-card border border-border-dim rounded-lg px-4 py-3 text-center">
               <div className="flex items-center justify-center gap-1 text-text-muted mb-1">{s.icon}<span className="text-xs font-mono">{s.label}</span></div>
-              <div className="font-display font-bold text-xl text-accent-green">{s.value}<span className="text-text-muted text-sm">{s.suffix}</span></div>
+              <div className="font-display font-bold text-xl text-accent-green">{s.value}</div>
             </div>
           ))}
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="space-y-3 mb-6">
         {/* Category filter */}
-        <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
+            <button key={cat} onClick={() => setCategory(cat)}
               className={`flex-shrink-0 text-xs font-mono px-3 py-1.5 rounded-lg border transition-all
                 ${category === cat
                   ? 'bg-accent-green/10 text-accent-green border-accent-green/30'
-                  : 'text-text-muted border-border-dim hover:text-white hover:border-border-bright'}`}
-            >
+                  : 'text-text-muted border-border-dim hover:text-white hover:border-border-bright'}`}>
               {cat}
             </button>
           ))}
         </div>
 
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-text-muted flex-shrink-0" />
-          <select
-            value={sort}
-            onChange={e => setSort(e.target.value)}
-            className="bg-bg-card border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50 cursor-pointer"
-          >
-            {SORT_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+        {/* Region filter + Sort */}
+        <div className="flex gap-2 items-center flex-wrap">
+          <span className="text-text-muted text-xs font-mono flex-shrink-0">Region:</span>
+          <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
+            {REGIONS.map(r => (
+              <button key={r} onClick={() => setRegion(r)}
+                className={`flex-shrink-0 text-xs font-mono px-3 py-1.5 rounded-lg border transition-all
+                  ${region === r
+                    ? 'bg-accent-blue/10 text-accent-blue border-accent-blue/30'
+                    : 'text-text-muted border-border-dim hover:text-white hover:border-border-bright'}`}>
+                {r === 'All' ? '🌐 All' : r === 'Global' ? '🌐 Global' : r === 'US' ? '🇺🇸 US' : r === 'UK' ? '🇬🇧 UK' : r === 'EU' ? '🇪🇺 EU' : r === 'Asia' ? '🌏 Asia' : r === 'Australia' ? '🇦🇺 AUS' : '🇨🇦 CA'}
+              </button>
             ))}
-          </select>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Filter size={14} className="text-text-muted" />
+            <select value={sort} onChange={e => setSort(e.target.value)}
+              className="bg-bg-card border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50 cursor-pointer">
+              {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -216,9 +212,7 @@ export default function DashboardPage() {
         <div className="text-center py-24">
           <div className="text-text-muted text-5xl mb-4">📡</div>
           <h3 className="font-display font-bold text-xl text-white mb-2">No Opportunities Found</h3>
-          <p className="text-text-secondary text-sm">
-            The scanner is running. Check back in 30 seconds or try a different filter.
-          </p>
+          <p className="text-text-secondary text-sm">Try a different category or region filter.</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">

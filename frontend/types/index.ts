@@ -5,6 +5,16 @@ export type Category =
   | 'Price Mistakes'
   | 'Discounts';
 
+export type Region =
+  | 'Global'
+  | 'US'
+  | 'UK'
+  | 'EU'
+  | 'Asia'
+  | 'Australia'
+  | 'Canada'
+  | 'Nigeria';
+
 export interface Opportunity {
   id: string;
   title: string;
@@ -15,6 +25,7 @@ export interface Opportunity {
   source: string;
   source_url?: string;
   expires_at?: string;
+  region: Region;
   created_at: string;
   metadata?: Record<string, unknown>;
 }
@@ -33,3 +44,4 @@ export interface UserProfile {
   username: string;
   created_at: string;
 }
+
