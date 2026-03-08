@@ -52,7 +52,7 @@ export default function DashboardPage() {
       params.set('limit', '50');
 
       const url = API_URL
-        ? `${API_URL}/api/opportunities?${params}`
+        const url = null;
         : null;
 
       let data: Opportunity[] = [];
