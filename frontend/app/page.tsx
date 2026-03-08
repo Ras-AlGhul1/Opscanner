@@ -1,235 +1,457 @@
 'use client';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { TrendingUp, Zap, Shield, ChevronRight, Activity, DollarSign, Target } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { createClient } from '@/lib/supabase';
+import OpportunityCard from '@/components/OpportunityCard';
+import type { Opportunity } from '@/types';
+import { RefreshCw, Filter, TrendingUp, Zap, Activity, ChevronDown, X } from 'lucide-react';
 
-const TICKER_ITEMS = [
-  { label: 'BTC/ETH Arb', profit: '+$847', change: '+12.3%', cat: 'CRYPTO' },
-  { label: 'Lakers -3.5 Hedge', profit: '+$234', change: '+8.7%', cat: 'SPORTS' },
-  { label: 'PS5 Restock Flip', profit: '+$120', change: '+24%', cat: 'RESELL' },
-  { label: 'SOL/USDC Arb', profit: '+$1,204', change: '+6.1%', cat: 'CRYPTO' },
-  { label: 'Price Error: RTX 4090', profit: '+$680', change: '+45%', cat: 'DEAL' },
-  { label: 'MLS Arbitrage', profit: '+$312', change: '+15.2%', cat: 'SPORTS' },
+const CATEGORIES = ['All', 'Sports Betting', 'Crypto Arbitrage', 'Product Reselling', 'Price Mistakes', 'Discounts'];
+
+const SORT_OPTIONS = [
+  { value: 'oldest',     label: 'Oldest First' },
+  { value: 'newest',     label: 'Newest First' },
+  { value: 'profit',     label: 'Highest Profit' },
+  { value: 'confidence', label: 'Best Confidence' },
 ];
 
-const STATS = [
-  { value: '2,847', label: 'Opportunities Found Today' },
-  { value: '$1.2M', label: 'Estimated Profit Discovered' },
-  { value: '94%', label: 'Scanner Accuracy' },
-  { value: '<30s', label: 'New Scan Interval' },
+const COUNTRIES = [
+  { code: 'All',  label: '🌍 All Countries' },
+  { code: 'US',   label: '🇺🇸 United States' },
+  { code: 'UK',   label: '🇬🇧 United Kingdom' },
+  { code: 'EU',   label: '🇪🇺 Europe' },
+  { code: 'AU',   label: '🇦🇺 Australia' },
+  { code: 'NG',   label: '🇳🇬 Nigeria' },
+  { code: 'CA',   label: '🇨🇦 Canada' },
+  { code: 'GLOBAL', label: '🌐 Global / Online' },
 ];
 
-const FEATURES = [
-  {
-    icon: <Zap size={22} />,
-    color: 'accent-green',
-    title: 'Real-Time Scanning',
-    desc: 'AI continuously monitors sports books, crypto exchanges, and retail platforms every 30 seconds.',
-  },
-  {
-    icon: <Target size={22} />,
-    color: 'accent-blue',
-    title: 'Confidence Scoring',
-    desc: 'Each opportunity is ranked 0–100 based on historical patterns, volume, and timing signals.',
-  },
-  {
-    icon: <DollarSign size={22} />,
-    color: 'accent-orange',
-    title: 'Profit Estimation',
-    desc: 'Instant profit projections factoring in fees, slippage, and realistic execution windows.',
-  },
-  {
-    icon: <Shield size={22} />,
-    color: 'accent-purple',
-    title: 'Risk Analysis',
-    desc: 'Every signal comes with risk flags and expiry windows so you can act fast and smart.',
-  },
-];
+// ── Platform availability map ─────────────────────────────────────────────
+// Each platform lists every country code it operates in.
+// This handles multi-country platforms correctly — bet365 appears in UK, EU, AU, NG, CA etc.
 
-export default function LandingPage() {
-  const [tickerOffset, setTickerOffset] = useState(0);
-  const [mounted, setMounted] = useState(false);
+const PLATFORM_COUNTRIES: Record<string, string[]> = {
+  // ── Sportsbooks ──
+  'draftkings':        ['US', 'CA'],
+  'fanduel':           ['US', 'CA'],
+  'betmgm':            ['US', 'CA', 'UK', 'EU'],
+  'caesars':           ['US'],
+  'pointsbet':         ['US', 'CA', 'AU'],
+  'betrivers':         ['US'],
+  'bet365':            ['UK', 'EU', 'AU', 'CA', 'NG', 'GLOBAL'],
+  'william hill':      ['UK', 'EU', 'US', 'AU'],
+  'williamhill':       ['UK', 'EU', 'US', 'AU'],
+  'betfair':           ['UK', 'EU', 'AU'],
+  'unibet':            ['UK', 'EU', 'AU', 'CA'],
+  'sky bet':           ['UK'],
+  'paddy power':       ['UK', 'EU'],
+  'coral':             ['UK'],
+  'ladbrokes':         ['UK', 'EU', 'AU'],
+  'pinnacle':          ['EU', 'GLOBAL'],
+  'bwin':              ['EU'],
+  'tab':               ['AU'],
+  'sportsbet':         ['AU'],
+  'neds':              ['AU'],
+  'bluebet':           ['AU'],
+  'betway':            ['UK', 'EU', 'AU', 'NG', 'CA', 'GLOBAL'],
+  'bet9ja':            ['NG'],
+  '1xbet':             ['NG', 'EU', 'GLOBAL'],
+  'sportybet':         ['NG', 'EU'],
+  'betking':           ['NG'],
+  'bangbet':           ['NG'],
+  'nairabet':          ['NG'],
+  'merrybet':          ['NG'],
+  'sports interaction':['CA'],
+  'bet99':             ['CA'],
 
+  // ── Crypto exchanges (always global) ──
+  'binance':           ['US', 'UK', 'EU', 'AU', 'CA', 'NG', 'GLOBAL'],
+  'coinbase':          ['US', 'UK', 'EU', 'AU', 'CA', 'GLOBAL'],
+  'kraken':            ['US', 'UK', 'EU', 'AU', 'CA', 'GLOBAL'],
+  'bybit':             ['UK', 'EU', 'AU', 'NG', 'CA', 'GLOBAL'],
+  'okx':               ['UK', 'EU', 'AU', 'NG', 'CA', 'GLOBAL'],
+
+  // ── Retailers ──
+  'amazon':            ['US', 'UK', 'EU', 'AU', 'CA', 'GLOBAL'],
+  'ebay':              ['US', 'UK', 'EU', 'AU', 'CA', 'GLOBAL'],
+  'walmart':           ['US', 'CA'],
+  'target':            ['US', 'AU'],
+  'best buy':          ['US', 'CA'],
+  'costco':            ['US', 'CA', 'UK', 'AU'],
+  'newegg':            ['US', 'CA'],
+  'slickdeals':        ['US', 'CA', 'GLOBAL'],
+  'asos':              ['UK', 'EU', 'AU', 'US', 'CA', 'GLOBAL'],
+  'argos':             ['UK'],
+  'currys':            ['UK'],
+  'john lewis':        ['UK'],
+};
+
+// Country filter logic — uses platform map for multi-country support
+function matchesCountry(opp: Opportunity, country: string): boolean {
+  if (country === 'All') return true;
+
+  // Crypto arbitrage is always globally accessible
+  if (opp.category === 'Crypto Arbitrage') return true;
+
+  const source   = (opp.source      || '').toLowerCase();
+  const title    = (opp.title       || '').toLowerCase();
+  const desc     = (opp.description || '').toLowerCase();
+  const combined = `${source} ${title} ${desc}`;
+
+  // Check every known platform against the combined text
+  for (const [platform, countries] of Object.entries(PLATFORM_COUNTRIES)) {
+    if (combined.includes(platform) && countries.includes(country)) {
+      return true;
+    }
+  }
+
+  // GLOBAL filter shows only platforms explicitly marked global
+  if (country === 'GLOBAL') return false;
+
+  // If no known platform matched, include it under All but not specific countries
+  return false;
+}
+
+function SkeletonCard() {
+  return (
+    <div className="bg-bg-card border border-border-dim rounded-xl p-5 space-y-4">
+      <div className="flex justify-between">
+        <div className="skeleton h-6 w-32 rounded-md" />
+        <div className="skeleton h-8 w-16 rounded" />
+      </div>
+      <div className="skeleton h-6 w-3/4 rounded" />
+      <div className="skeleton h-4 w-full rounded" />
+      <div className="skeleton h-4 w-4/5 rounded" />
+      <div className="skeleton h-1 w-full rounded" />
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const supabase = createClient();
+  const [opportunities, setOpportunities]   = useState<Opportunity[]>([]);
+  const [filtered, setFiltered]             = useState<Opportunity[]>([]);
+  const [savedIds, setSavedIds]             = useState<Set<string>>(new Set());
+  const [userId, setUserId]                 = useState<string>('');
+  const [loading, setLoading]               = useState(true);
+  const [refreshing, setRefreshing]         = useState(false);
+  const [category, setCategory]             = useState('All');
+  const [sort, setSort]                     = useState('oldest');
+  const [country, setCountry]               = useState('All');
+  const [minProfit, setMinProfit]           = useState('');
+  const [minConfidence, setMinConfidence]   = useState('');
+  const [dateFrom, setDateFrom]             = useState('');
+  const [dateTo, setDateTo]                 = useState('');
+  const [showAdvanced, setShowAdvanced]     = useState(false);
+  const [newIds, setNewIds]                 = useState<Set<string>>(new Set());
+  const [stats, setStats]                   = useState({ total: 0, avgProfit: 0, avgConfidence: 0 });
+  const pollRef    = useRef<ReturnType<typeof setInterval>>();
+  const prevIdsRef = useRef<Set<string>>(new Set());
+
+  // ── Fetch from Supabase ───────────────────────────────────────────────────
+  const fetchOpportunities = useCallback(async (silent = false) => {
+    if (!silent) setRefreshing(true);
+    try {
+      let query = supabase
+        .from('opportunities')
+        .select('*')
+        .order('created_at', { ascending: sort === 'oldest' })
+        .limit(200); // fetch more, filter client-side for country/date
+
+      if (category !== 'All') query = query.eq('category', category);
+      if (minConfidence)       query = query.gte('confidence_score', parseInt(minConfidence));
+      if (minProfit)           query = query.gte('estimated_profit', parseFloat(minProfit));
+      if (dateFrom)            query = query.gte('created_at', new Date(dateFrom).toISOString());
+      if (dateTo)              query = query.lte('created_at', new Date(dateTo + 'T23:59:59').toISOString());
+
+      // Server-side sort for profit/confidence
+      if (sort === 'profit')     query = supabase.from('opportunities').select('*').order('estimated_profit', { ascending: false }).limit(200);
+      if (sort === 'confidence') query = supabase.from('opportunities').select('*').order('confidence_score',  { ascending: false }).limit(200);
+
+      const { data: rows } = await query;
+      const data: Opportunity[] = rows ?? [];
+
+      // Detect new items
+      const currentIds = new Set(data.map((o) => o.id));
+      const freshIds   = new Set<string>();
+      if (prevIdsRef.current.size > 0) {
+        currentIds.forEach(id => { if (!prevIdsRef.current.has(id)) freshIds.add(id); });
+      }
+      prevIdsRef.current = currentIds;
+      if (freshIds.size > 0) {
+        setNewIds(freshIds);
+        setTimeout(() => setNewIds(new Set()), 8000);
+      }
+
+      setOpportunities(data);
+    } catch (err) {
+      console.error('Fetch error:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [category, sort, minConfidence, minProfit, dateFrom, dateTo]);
+
+  // ── Client-side country filter + stats ───────────────────────────────────
   useEffect(() => {
-    setMounted(true);
-    const interval = setInterval(() => {
-      setTickerOffset(o => (o + 1) % (TICKER_ITEMS.length * 200));
-    }, 40);
-    return () => clearInterval(interval);
+    const result = opportunities.filter(o => matchesCountry(o, country));
+    setFiltered(result);
+
+    if (result.length > 0) {
+      setStats({
+        total: result.length,
+        avgProfit:     result.reduce((s, o) => s + o.estimated_profit, 0) / result.length,
+        avgConfidence: result.reduce((s, o) => s + o.confidence_score,  0) / result.length,
+      });
+    } else {
+      setStats({ total: 0, avgProfit: 0, avgConfidence: 0 });
+    }
+  }, [opportunities, country]);
+
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUserId(data.user.id);
+        fetchSaved(data.user.id);
+      }
+    });
   }, []);
 
-  return (
-    <div className="min-h-screen bg-bg-primary scanlines overflow-hidden">
-      {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border-dim bg-bg-primary/90 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-accent-green rounded-sm flex items-center justify-center">
-              <Activity size={14} className="text-bg-primary" />
-            </div>
-            <span className="font-display font-bold text-lg tracking-wider text-white">
-              OPPORTUNITY<span className="text-accent-green">SCANNER</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/auth/login" className="text-text-secondary hover:text-white text-sm transition-colors px-3 py-1.5">
-              Login
-            </Link>
-            <Link href="/auth/signup" className="bg-accent-green text-bg-primary text-sm font-display font-bold px-4 py-1.5 rounded hover:bg-accent-green/90 transition-all">
-              GET ACCESS
-            </Link>
-          </div>
-        </div>
-      </nav>
+  const fetchSaved = useCallback(async (uid: string) => {
+    const { data } = await supabase.from('saved_opportunities').select('opportunity_id').eq('user_id', uid);
+    setSavedIds(new Set(data?.map(r => r.opportunity_id) ?? []));
+  }, []);
 
-      {/* Live Ticker */}
-      <div className="fixed top-14 left-0 right-0 z-40 bg-bg-secondary border-b border-border-dim overflow-hidden h-8 flex items-center">
-        <div className="flex-shrink-0 bg-accent-green text-bg-primary text-xs font-mono font-bold px-3 h-full flex items-center tracking-wider">
-          LIVE
+  // ── Poll ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchOpportunities();
+    clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => fetchOpportunities(true), 30000);
+    return () => clearInterval(pollRef.current);
+  }, [fetchOpportunities]);
+
+  // ── Save toggle ───────────────────────────────────────────────────────────
+  const handleToggleSave = async (opportunityId: string) => {
+    if (!userId) return;
+    if (savedIds.has(opportunityId)) {
+      await supabase.from('saved_opportunities').delete().eq('user_id', userId).eq('opportunity_id', opportunityId);
+      setSavedIds(prev => { const n = new Set(prev); n.delete(opportunityId); return n; });
+    } else {
+      await supabase.from('saved_opportunities').insert({ user_id: userId, opportunity_id: opportunityId });
+      setSavedIds(prev => new Set(prev).add(opportunityId));
+    }
+  };
+
+  // ── Reset filters ─────────────────────────────────────────────────────────
+  const resetFilters = () => {
+    setCategory('All');
+    setSort('oldest');
+    setCountry('All');
+    setMinProfit('');
+    setMinConfidence('');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const hasActiveFilters = category !== 'All' || sort !== 'oldest' || country !== 'All'
+    || minProfit || minConfidence || dateFrom || dateTo;
+
+  return (
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="font-display font-bold text-2xl text-white tracking-wide flex items-center gap-2">
+            <Activity size={22} className="text-accent-green" />
+            LIVE FEED
+            {refreshing && <RefreshCw size={16} className="animate-spin text-text-muted" />}
+          </h1>
+          <p className="text-text-muted text-sm font-mono mt-0.5">Auto-refreshes every 30 seconds</p>
         </div>
-        <div className="overflow-hidden flex-1 relative">
-          <div
-            className="flex gap-8 absolute whitespace-nowrap transition-none"
-            style={{ transform: `translateX(-${tickerOffset}px)` }}
-          >
-            {[...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="text-text-muted font-mono">[{item.cat}]</span>
-                <span className="text-text-secondary">{item.label}</span>
-                <span className="text-accent-green font-mono font-bold">{item.profit}</span>
-                <span className="text-text-muted">{item.change}</span>
-                <span className="text-border-bright mx-2">◆</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <button
+          onClick={() => fetchOpportunities()}
+          className="flex items-center gap-2 border border-border-dim text-text-secondary hover:text-white hover:border-accent-green/50 text-sm px-3 py-2 rounded-lg transition-all font-mono"
+        >
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          Refresh
+        </button>
       </div>
 
-      {/* Hero */}
-      <section className="pt-36 pb-24 px-4 relative">
-        {/* Background grid */}
-        <div
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: 'linear-gradient(#1e2d3d 1px, transparent 1px), linear-gradient(90deg, #1e2d3d 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-        />
-        {/* Glow orbs */}
-        <div className="absolute top-32 left-1/4 w-96 h-96 bg-accent-green/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-48 right-1/4 w-64 h-64 bg-accent-blue/5 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="max-w-5xl mx-auto text-center relative">
-          <div className="inline-flex items-center gap-2 bg-accent-green/10 border border-accent-green/20 rounded-full px-4 py-1.5 mb-8">
-            <div className="w-2 h-2 bg-accent-green rounded-full animate-pulse" />
-            <span className="text-accent-green text-xs font-mono tracking-widest">SCANNER ACTIVE — 2,847 OPPORTUNITIES FOUND TODAY</span>
-          </div>
-
-          <h1 className="font-display text-5xl sm:text-7xl font-bold text-white mb-6 leading-tight tracking-wide">
-            FIND PROFIT<br />
-            <span className="text-accent-green glow-green">BEFORE ANYONE ELSE</span>
-          </h1>
-
-          <p className="text-text-secondary text-lg sm:text-xl max-w-2xl mx-auto mb-10 font-light leading-relaxed">
-            AI-powered scanner that monitors sports books, crypto exchanges, and retail platforms
-            to surface arbitrage opportunities and price mistakes in real-time.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link
-              href="/auth/signup"
-              className="group flex items-center gap-2 bg-accent-green text-bg-primary font-display font-bold text-lg px-8 py-3.5 rounded hover:bg-accent-green/90 transition-all hover:shadow-[0_0_30px_rgba(0,255,136,0.3)]"
-            >
-              START SCANNING FREE
-              <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <Link
-              href="/auth/login"
-              className="flex items-center gap-2 border border-border-bright text-text-secondary font-display font-bold text-lg px-8 py-3.5 rounded hover:border-accent-blue hover:text-white transition-all"
-            >
-              VIEW DEMO FEED
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Bar */}
-      <section className="border-y border-border-dim bg-bg-secondary/50">
-        <div className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-          {STATS.map((stat, i) => (
-            <div key={i} className="text-center">
-              <div className="font-display font-bold text-3xl text-accent-green glow-green mb-1">
-                {stat.value}
+      {/* Stats row */}
+      {!loading && filtered.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          {[
+            { icon: <Zap size={14} />,        label: 'Found',      value: stats.total,                          suffix: '' },
+            { icon: <TrendingUp size={14} />,  label: 'Avg Profit', value: `$${stats.avgProfit.toFixed(0)}`,     suffix: '' },
+            { icon: <Activity size={14} />,    label: 'Avg Score',  value: `${stats.avgConfidence.toFixed(0)}`,  suffix: '/100' },
+          ].map((s, i) => (
+            <div key={i} className="bg-bg-card border border-border-dim rounded-lg px-4 py-3 text-center">
+              <div className="flex items-center justify-center gap-1 text-text-muted mb-1">
+                {s.icon}<span className="text-xs font-mono">{s.label}</span>
               </div>
-              <div className="text-text-muted text-xs font-mono uppercase tracking-wider">
-                {stat.label}
+              <div className="font-display font-bold text-xl text-accent-green">
+                {s.value}<span className="text-text-muted text-sm">{s.suffix}</span>
               </div>
             </div>
           ))}
         </div>
-      </section>
+      )}
 
-      {/* Features */}
-      <section className="py-24 px-4">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <h2 className="font-display font-bold text-4xl text-white mb-3">
-              HOW THE SCANNER <span className="text-accent-blue glow-blue">WORKS</span>
-            </h2>
-            <p className="text-text-secondary">Four layers of intelligence working simultaneously</p>
-          </div>
+      {/* ── Filters ── */}
+      <div className="bg-bg-card border border-border-dim rounded-xl p-4 mb-6 space-y-4">
 
-          <div className="grid md:grid-cols-2 gap-5">
-            {FEATURES.map((f, i) => (
-              <div
-                key={i}
-                className="bg-bg-card border border-border-dim rounded-lg p-6 hover:border-border-bright transition-all group"
-              >
-                <div className={`text-${f.color} mb-4 group-hover:scale-110 transition-transform inline-block`}>
-                  {f.icon}
-                </div>
-                <h3 className="font-display font-bold text-xl text-white mb-2 tracking-wide">{f.title}</h3>
-                <p className="text-text-secondary text-sm leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
+        {/* Row 1: Category tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategory(cat)}
+              className={`flex-shrink-0 text-xs font-mono px-3 py-1.5 rounded-lg border transition-all
+                ${category === cat
+                  ? 'bg-accent-green/10 text-accent-green border-accent-green/30'
+                  : 'text-text-muted border-border-dim hover:text-white hover:border-border-bright'}`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
-      </section>
 
-      {/* CTA */}
-      <section className="py-20 px-4 border-t border-border-dim">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="font-display font-bold text-4xl text-white mb-4">
-            READY TO <span className="text-accent-green glow-green">SCAN?</span>
-          </h2>
-          <p className="text-text-secondary mb-8">
-            Join thousands of users finding profitable opportunities every day.
-            Free to start. No credit card required.
-          </p>
-          <Link
-            href="/auth/signup"
-            className="inline-flex items-center gap-2 bg-accent-green text-bg-primary font-display font-bold text-xl px-10 py-4 rounded hover:bg-accent-green/90 transition-all hover:shadow-[0_0_40px_rgba(0,255,136,0.4)]"
+        {/* Row 2: Sort + Country + Advanced toggle */}
+        <div className="flex flex-wrap gap-3 items-center">
+
+          {/* Sort */}
+          <div className="flex items-center gap-2">
+            <Filter size={13} className="text-text-muted" />
+            <select
+              value={sort}
+              onChange={e => setSort(e.target.value)}
+              className="bg-bg-secondary border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50 cursor-pointer"
+            >
+              {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+
+          {/* Country */}
+          <div className="flex items-center gap-2">
+            <select
+              value={country}
+              onChange={e => setCountry(e.target.value)}
+              className="bg-bg-secondary border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50 cursor-pointer"
+            >
+              {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+            </select>
+          </div>
+
+          {/* Advanced toggle */}
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className={`flex items-center gap-1 text-xs font-mono px-3 py-1.5 rounded-lg border transition-all
+              ${showAdvanced ? 'text-accent-green border-accent-green/30 bg-accent-green/10' : 'text-text-muted border-border-dim hover:text-white'}`}
           >
-            CREATE FREE ACCOUNT
-            <TrendingUp size={22} />
-          </Link>
-        </div>
-      </section>
+            Advanced
+            <ChevronDown size={12} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+          </button>
 
-      {/* Footer */}
-      <footer className="border-t border-border-dim py-8 px-4 text-center">
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <div className="w-5 h-5 bg-accent-green rounded-sm flex items-center justify-center">
-            <Activity size={12} className="text-bg-primary" />
-          </div>
-          <span className="font-display font-bold text-sm tracking-wider text-white">
-            OPPORTUNITY<span className="text-accent-green">SCANNER</span>
-          </span>
+          {/* Reset */}
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="flex items-center gap-1 text-xs font-mono px-3 py-1.5 rounded-lg border border-accent-red/30 text-accent-red hover:bg-accent-red/10 transition-all"
+            >
+              <X size={11} /> Reset
+            </button>
+          )}
         </div>
-        <p className="text-text-muted text-xs font-mono">
-          © 2025 OpportunityScanner. All opportunities are simulated for MVP demonstration.
-        </p>
-      </footer>
+
+        {/* Row 3: Advanced filters (collapsible) */}
+        {showAdvanced && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-border-dim">
+
+            <div className="space-y-1">
+              <label className="text-text-muted text-xs font-mono uppercase tracking-wider">Min Profit ($)</label>
+              <input
+                type="number"
+                value={minProfit}
+                onChange={e => setMinProfit(e.target.value)}
+                placeholder="e.g. 100"
+                className="w-full bg-bg-secondary border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-text-muted text-xs font-mono uppercase tracking-wider">Min Confidence</label>
+              <input
+                type="number"
+                value={minConfidence}
+                onChange={e => setMinConfidence(e.target.value)}
+                placeholder="e.g. 75"
+                min="0"
+                max="100"
+                className="w-full bg-bg-secondary border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-text-muted text-xs font-mono uppercase tracking-wider">Date From</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="w-full bg-bg-secondary border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-text-muted text-xs font-mono uppercase tracking-wider">Date To</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="w-full bg-bg-secondary border border-border-dim text-text-secondary text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-accent-green/50"
+              />
+            </div>
+
+          </div>
+        )}
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-24">
+          <div className="text-text-muted text-5xl mb-4">📡</div>
+          <h3 className="font-display font-bold text-xl text-white mb-2">No Opportunities Found</h3>
+          <p className="text-text-secondary text-sm">
+            {hasActiveFilters
+              ? 'Try adjusting your filters or click Reset to clear them.'
+              : 'The scanner is running. Check back in 30 seconds.'}
+          </p>
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="mt-4 text-xs font-mono px-4 py-2 rounded-lg border border-accent-green/30 text-accent-green hover:bg-accent-green/10 transition-all"
+            >
+              Reset Filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map(opp => (
+            <OpportunityCard
+              key={opp.id}
+              opportunity={opp}
+              isSaved={savedIds.has(opp.id)}
+              onToggleSave={handleToggleSave}
+              isNew={newIds.has(opp.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
