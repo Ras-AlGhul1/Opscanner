@@ -189,7 +189,7 @@ export default function DashboardPage() {
                   ${region === r
                     ? 'bg-accent-blue/10 text-accent-blue border-accent-blue/30'
                     : 'text-text-muted border-border-dim hover:text-white hover:border-border-bright'}`}>
-                {r === 'All' ? '🌐 All' : r === 'Global' ? '🌐 Global' : r === 'US' ? '🇺🇸 US' : r === 'UK' ? '🇬🇧 UK' : r === 'EU' ? '🇪🇺 EU' : r === 'Asia' ? '🌏 Asia' : r === 'Australia' ? '🇦🇺 AUS' : '🇨🇦 CA'}
+                {r === 'All' ? '🌐 All' : r === 'Global' ? '🌐 Global' : r === 'US' ? '🇺🇸 US' : r === 'UK' ? '🇬🇧 UK' : r === 'EU' ? '🇪🇺 EU' : r === 'Asia' ? '🌏 Asia' : r === 'Australia' ? '🇦🇺 AUS' : r === 'Canada' ? '🇨🇦 CA' : r === 'Nigeria' ? '🇳🇬 NG' : r}
               </button>
             ))}
           </div>
