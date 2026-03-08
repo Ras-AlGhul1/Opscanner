@@ -33,7 +33,9 @@ async function fetchRealCryptoOpportunities() {
         const gap = Math.abs(change1h) * 0.4;
         const priceA = (price * (1 + gap / 100)).toFixed(2);
         const priceB = (price * (1 - gap / 100)).toFixed(2);
-        const estimatedProfit = parseFloat((price * gap / 100 * rand(0.5, 2)).toFixed(2));
+        const tradeSize = rand(5000, 25000);
+        const estimatedProfit = parseFloat((tradeSize * gap / 100).toFixed(2));
+        const roi = parseFloat((gap).toFixed(2));
         const confidence = Math.min(95, Math.round(50 + Math.abs(change1h) * 8));
         opportunities.push({
           id: uuidv4(),
@@ -46,7 +48,7 @@ async function fetchRealCryptoOpportunities() {
           source_url: `https://www.coingecko.com/en/coins/${coin.id}`,
           region: pick(['Global', 'Asia', 'US', 'EU']),
           created_at: new Date().toISOString(),
-          metadata: { coin: coin.id, symbol: coin.symbol, price, change1h, change24h },
+          metadata: { coin: coin.id, symbol: coin.symbol, price, change1h, change24h, roi, tradeSize: Math.round(tradeSize) },
         });
       }
     }
@@ -87,7 +89,7 @@ async function fetchRealCryptoOpportunities() {
           title: `${coin.symbol.toUpperCase()}/USD Price Monitor: ${exA} vs ${exB}`,
           description: `${coin.name} currently at $${price.toLocaleString()}. ${exA} showing $${priceA} vs ${exB} at $${priceB}. 1h change: ${change1h.toFixed(3)}%, 24h change: ${change24h.toFixed(2)}%. Low volatility window — monitor for entry.`,
           category: 'Crypto Arbitrage',
-          estimated_profit: parseFloat((price * gap / 100 * 0.5).toFixed(2)),
+          estimated_profit: parseFloat((rand(5000, 15000) * gap / 100).toFixed(2)),
           confidence_score: randInt(35, 55),
           source: `${exA} / ${exB}`,
           source_url: `https://www.coingecko.com/en/coins/${coin.id}`,
@@ -105,60 +107,127 @@ async function fetchRealCryptoOpportunities() {
   }
 }
 
-// ─── REAL: NewsAPI ────────────────────────────────────────────
+// ─── REAL: NewsAPI (profit-relevant only) ────────────────────
+const PROFIT_KEYWORDS = [
+  'arbitrage', 'flash sale', 'price error', 'mispriced', 'undervalued',
+  'discount', 'deal', 'limited edition', 'resell', 'resale', 'sneaker',
+  'crypto', 'bitcoin', 'ethereum', 'solana', 'pump', 'surge', 'rally',
+  'betting', 'odds', 'sportsbook', 'spread', 'hedge',
+  'profit', 'margin', 'opportunity', 'shortage', 'sellout',
+  'price drop', 'clearance', 'liquidation', 'below market',
+];
+
+const IRRELEVANT_KEYWORDS = [
+  'war', 'death', 'killed', 'shooting', 'murder', 'accident', 'crash',
+  'election', 'politics', 'government', 'senate', 'congress', 'vote',
+  'weather', 'hurricane', 'earthquake', 'flood', 'wildfire',
+  'celebrity', 'actor', 'actress', 'singer', 'gossip', 'dating',
+  'health', 'virus', 'disease', 'hospital', 'cancer',
+  'recipe', 'food', 'restaurant', 'diet', 'fitness',
+  'opinion', 'editorial', 'column', 'review',
+];
+
+function isRelevantArticle(article) {
+  const text = (article.title + ' ' + (article.description ?? '')).toLowerCase();
+  
+  // Reject if title removed or empty
+  if (!article.title || article.title === '[Removed]') return false;
+
+  // Reject if contains irrelevant keywords
+  if (IRRELEVANT_KEYWORDS.some(kw => text.includes(kw))) return false;
+
+  // Must contain at least one profit keyword
+  if (!PROFIT_KEYWORDS.some(kw => text.includes(kw))) return false;
+
+  return true;
+}
+
+function buildProfitExplanation(category, text, sourceName) {
+  if (category === 'Crypto Arbitrage') {
+    return `This news indicates significant movement in the crypto market. Price dislocations across exchanges often follow major news events, creating short-term arbitrage windows before markets re-equilibrate. Acting quickly on such signals — buying on lower-priced exchanges and selling on higher-priced ones — can capture this spread.`;
+  }
+  if (category === 'Sports Betting') {
+    return `Breaking sports news can cause bookmakers to lag in updating their odds. If one sportsbook hasn't yet adjusted to reflect this development, a temporary mispricing may exist. Comparing odds across multiple books right now could reveal an arbitrage window guaranteeing profit regardless of outcome.`;
+  }
+  if (category === 'Product Reselling') {
+    return `This news signals a supply or demand shift for a specific product. When demand spikes or supply drops, resale prices on secondary markets like eBay or StockX typically rise above retail. Buying at retail now and reselling at market price can capture the margin.`;
+  }
+  if (category === 'Price Mistakes') {
+    return `This article may indicate a retailer pricing error or unadvertised sale. Price mistakes are typically corrected within hours — acting fast and purchasing before the correction is key. Many retailers honour incorrectly listed prices if the order is placed before the error is fixed.`;
+  }
+  return `This news signal indicates a market inefficiency or time-sensitive deal. Monitoring the situation closely and acting before wider market awareness closes the gap is the core strategy here.`;
+}
+
 async function fetchRealNewsOpportunities() {
   try {
     const queries = [
-      'price error deal discount',
-      'crypto arbitrage profit',
-      'flash sale limited stock',
-      'sports betting arbitrage odds',
-      'product resell sneakers limited',
+      'crypto arbitrage price surge',
+      'flash sale limited stock sellout',
+      'price error mispriced deal discount',
+      'sneaker resell limited edition release',
+      'sports betting odds arbitrage hedge',
+      'bitcoin ethereum rally profit opportunity',
+      'liquidation clearance below market price',
     ];
     const query = pick(queries);
-    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=5&apiKey=${NEWS_API_KEY}`;
+    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=10&apiKey=${NEWS_API_KEY}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`NewsAPI error: ${res.status}`);
     const data = await res.json();
     if (data.status !== 'ok' || !data.articles?.length) return [];
 
+    // Filter to only profit-relevant articles
+    const relevant = data.articles.filter(isRelevantArticle);
+    if (!relevant.length) {
+      console.log('[NEWS] No relevant articles found this cycle');
+      return [];
+    }
+
     const opportunities = [];
-    for (const article of data.articles.slice(0, 3)) {
-      if (!article.title || article.title === '[Removed]') continue;
+    for (const article of relevant.slice(0, 3)) {
       const text = (article.title + ' ' + (article.description ?? '')).toLowerCase();
+      
       let category = 'Discounts';
-      if (text.includes('crypto') || text.includes('bitcoin') || text.includes('ethereum')) category = 'Crypto Arbitrage';
-      else if (text.includes('bet') || text.includes('odds') || text.includes('sport')) category = 'Sports Betting';
-      else if (text.includes('resell') || text.includes('sneaker') || text.includes('limited')) category = 'Product Reselling';
-      else if (text.includes('error') || text.includes('mistake') || text.includes('wrong price')) category = 'Price Mistakes';
+      if (text.includes('crypto') || text.includes('bitcoin') || text.includes('ethereum') || text.includes('solana')) category = 'Crypto Arbitrage';
+      else if (text.includes('bet') || text.includes('odds') || text.includes('sport') || text.includes('hedge')) category = 'Sports Betting';
+      else if (text.includes('resell') || text.includes('sneaker') || text.includes('limited') || text.includes('resale')) category = 'Product Reselling';
+      else if (text.includes('error') || text.includes('mispriced') || text.includes('wrong price') || text.includes('price mistake')) category = 'Price Mistakes';
 
       const sourceName = article.source?.name ?? 'News';
       let region = 'US';
       if (text.includes('nigeria') || text.includes('naira') || sourceName.toLowerCase().includes('nigeria')) region = 'Nigeria';
-      else if (text.includes('uk ') || text.includes('britain') || text.includes('pound')) region = 'UK';
-      else if (text.includes('europe') || text.includes('euro')) region = 'EU';
-      else if (text.includes('australia')) region = 'Australia';
-      else if (text.includes('canada')) region = 'Canada';
-      else if (text.includes('asia') || text.includes('japan') || text.includes('china')) region = 'Asia';
+      else if (text.includes('uk ') || text.includes('britain') || text.includes('pound sterling')) region = 'UK';
+      else if (text.includes('europe') || text.includes(' euro ')) region = 'EU';
+      else if (text.includes('australia') || text.includes('aussie')) region = 'Australia';
+      else if (text.includes('canada') || text.includes('canadian')) region = 'Canada';
+      else if (text.includes('asia') || text.includes('japan') || text.includes('china') || text.includes('korea')) region = 'Asia';
+
+      const profitExplanation = buildProfitExplanation(category, text, sourceName);
+      const estimatedProfit = parseFloat((rand(500, 5000)).toFixed(2));
+      const confidence = randInt(45, 78);
 
       opportunities.push({
         id: uuidv4(),
         title: `📰 ${article.title.slice(0, 80)}${article.title.length > 80 ? '...' : ''}`,
         description: article.description
-          ? `${article.description} — Source: ${sourceName}. This news signal may indicate a profitable opportunity. Always verify before acting.`
-          : `News signal from ${sourceName}. This may indicate a profitable opportunity. Always verify before acting.`,
+          ? `${article.description} — Source: ${sourceName}.`
+          : `News signal from ${sourceName}.`,
         category,
-        estimated_profit: parseFloat((rand(50, 800)).toFixed(2)),
-        confidence_score: randInt(40, 78),
+        estimated_profit: estimatedProfit,
+        confidence_score: confidence,
         source: sourceName,
         source_url: article.url ?? null,
         region,
         created_at: new Date().toISOString(),
-        metadata: { type: 'news_signal', publishedAt: article.publishedAt },
+        metadata: {
+          type: 'news_signal',
+          publishedAt: article.publishedAt,
+          profitExplanation,
+        },
       });
     }
 
-    console.log(`[NEWS] Generated ${opportunities.length} real news opportunities`);
+    console.log(`[NEWS] ${relevant.length} relevant articles found, generated ${opportunities.length} opportunities`);
     return opportunities;
   } catch (err) {
     console.error('[NEWS] Error:', err.message);
@@ -212,7 +281,8 @@ async function fetchRealSportsBettingOpportunities() {
       if (sport.includes('epl') || sport.includes('soccer')) region = pick(['UK', 'EU', 'Nigeria', 'Global']);
       else if (sport.includes('nba') || sport.includes('nfl')) region = pick(['US', 'Nigeria']);
 
-      const stake = 500;
+      const stake = randInt(2000, 10000);
+      const roi = parseFloat(Math.abs(arbPercent).toFixed(2));
       const estimatedProfit = parseFloat((stake * Math.abs(arbPercent) / 100).toFixed(2));
       const confidence = arbPercent > 0 ? Math.min(92, Math.round(60 + arbPercent * 10)) : randInt(45, 68);
 
