@@ -50,13 +50,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         lg:translate-x-0 lg:static lg:flex
       `}>
         {/* Logo */}
-        <div className="h-14 flex items-center px-5 border-b border-border-dim gap-2 flex-shrink-0">
-          <div className="w-6 h-6 bg-accent-green rounded-sm flex items-center justify-center">
-            <Activity size={14} className="text-bg-primary" />
-          </div>
-          <span className="font-display font-bold text-base tracking-wider text-white">
-            OPP<span className="text-accent-green">SCAN</span>
-          </span>
+        <div className="h-14 flex items-center px-4 border-b border-border-dim gap-2 flex-shrink-0">
+          <img src="/logo.svg" alt="ArbitraxAI" className="h-8 w-auto" />
           <div className="ml-auto flex items-center gap-1">
             <div className="w-1.5 h-1.5 bg-accent-green rounded-full animate-pulse" />
             <span className="text-accent-green text-xs font-mono">LIVE</span>
@@ -134,7 +129,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-1 text-text-muted text-xs font-mono">
             <Bell size={14} />
-            <span>Notifications coming soon</span>
+            <span>Alerts active</span>
           </div>
         </header>
 
