@@ -11,9 +11,19 @@ const COINGECKO_KEY = process.env.COINGECKO_API_KEY || null;
 function rand(min, max) { return Math.random() * (max - min) + min; }
 function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+};
+
 async function safeFetch(url, options = {}) {
   try {
-    const res = await fetch(url, { ...options, signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...BROWSER_HEADERS, ...(options.headers || {}) },
+      signal: AbortSignal.timeout(10000),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res;
   } catch (err) {
