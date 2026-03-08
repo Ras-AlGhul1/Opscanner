@@ -1,9 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { Bookmark, BookmarkCheck, ExternalLink, TrendingUp, Clock, Shield, Sparkles, ThumbsUp, ThumbsDown, Calculator, X } from 'lucide-react';
+import { Bookmark, BookmarkCheck, ExternalLink, TrendingUp, Clock, Shield, Sparkles, ThumbsUp, ThumbsDown, Calculator, X, Share2, Flame } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { createClient } from '@/lib/supabase';
 import type { Opportunity } from '@/types';
+import ShareCard from './ShareCard';
+import { recordInteraction } from './StreakBanner';
 
 const CATEGORY_CONFIG: Record<string, { color: string; bg: string; border: string; dot: string }> = {
   'Sports Betting':    { color: 'text-accent-orange', bg: 'bg-accent-orange/10', border: 'border-accent-orange/20', dot: 'bg-accent-orange' },
@@ -113,6 +115,8 @@ function ProfitCalculator({ opportunity, onClose }: { opportunity: Opportunity; 
         </div>
       </div>
       <p className="text-text-muted text-xs font-mono">* Estimates only. Always verify before acting.</p>
+      {/* Share modal */}
+      {showShare && <ShareCard opportunity={opportunity} onClose={() => setShowShare(false)} />}
     </div>
   );
 }
@@ -131,6 +135,8 @@ function ConfidenceBar({ score }: { score: number }) {
       <div className="h-1 bg-bg-secondary rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${score}%`, backgroundColor: color }} />
       </div>
+      {/* Share modal */}
+      {showShare && <ShareCard opportunity={opportunity} onClose={() => setShowShare(false)} />}
     </div>
   );
 }
@@ -189,6 +195,8 @@ function RatingButtons({ opportunityId, onRate }: { opportunityId: string; onRat
       >
         <ThumbsDown size={13} />
       </button>
+      {/* Share modal */}
+      {showShare && <ShareCard opportunity={opportunity} onClose={() => setShowShare(false)} />}
     </div>
   );
 }
@@ -207,6 +215,7 @@ export default function OpportunityCard({ opportunity, isSaved, onToggleSave, is
   const [expanded, setExpanded]     = useState(false);
   const [showCalc, setShowCalc]     = useState(false);
   const [rated, setRated]           = useState<'up' | 'down' | null>(null);
+  const [showShare, setShowShare]   = useState(false);
   const { expired }                 = useCountdown(opportunity.expires_at);
   const cfg = CATEGORY_CONFIG[opportunity.category] ?? CATEGORY_CONFIG['Discounts'];
 
@@ -219,12 +228,13 @@ export default function OpportunityCard({ opportunity, isSaved, onToggleSave, is
     e.stopPropagation();
     setSaving(true);
     await onToggleSave(opportunity.id);
+    recordInteraction('save');
     setSaving(false);
   };
 
   const handleRate = useCallback((_id: string, rating: 'up' | 'down') => {
     setRated(rating);
-    // Could persist to Supabase here in future
+    recordInteraction('rate');
     console.log(`Rated ${_id}: ${rating}`);
   }, []);
 
@@ -237,7 +247,7 @@ export default function OpportunityCard({ opportunity, isSaved, onToggleSave, is
 
   return (
     <div
-      onClick={() => setExpanded(!expanded)}
+      onClick={() => { setExpanded(!expanded); if (!expanded) recordInteraction('view'); }}
       className={`
         opportunity-card bg-bg-card border rounded-xl p-5 relative overflow-hidden cursor-pointer
         transition-all duration-200
@@ -249,6 +259,12 @@ export default function OpportunityCard({ opportunity, isSaved, onToggleSave, is
       {isNew && (
         <div className="absolute top-3 right-3">
           <span className="bg-accent-green text-bg-primary text-xs font-mono font-bold px-2 py-0.5 rounded-full badge-pulse">NEW</span>
+        </div>
+      )}
+      {/* Hot badge */}
+      {!isNew && (opportunity as any).share_count >= 3 && (
+        <div className="absolute top-3 right-3 flex items-center gap-1 bg-accent-orange/20 border border-accent-orange/30 text-accent-orange text-xs font-mono font-bold px-2 py-0.5 rounded-full">
+          <Flame size={10} /> HOT
         </div>
       )}
 
@@ -341,6 +357,13 @@ export default function OpportunityCard({ opportunity, isSaved, onToggleSave, is
             </a>
           )}
           <button
+            onClick={e => { e.stopPropagation(); setShowShare(true); recordInteraction('share'); }}
+            className="p-1.5 text-text-muted hover:text-accent-blue transition-colors"
+            title="Share"
+          >
+            <Share2 size={15} />
+          </button>
+          <button
             onClick={handleSave}
             disabled={saving}
             className={`p-1.5 transition-colors ${isSaved ? 'text-accent-yellow' : 'text-text-muted hover:text-accent-yellow'}`}
@@ -349,6 +372,8 @@ export default function OpportunityCard({ opportunity, isSaved, onToggleSave, is
           </button>
         </div>
       </div>
+      {/* Share modal */}
+      {showShare && <ShareCard opportunity={opportunity} onClose={() => setShowShare(false)} />}
     </div>
   );
 }

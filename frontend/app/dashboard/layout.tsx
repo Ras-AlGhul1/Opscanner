@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { Activity, LayoutDashboard, Bookmark, LogOut, User, ChevronDown, Menu, X, Bell } from 'lucide-react';
+import LiveTicker from '@/components/LiveTicker';
 
 const NAV_LINKS = [
   { href: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Live Feed' },
@@ -133,6 +134,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
+        <LiveTicker />
         <main className="flex-1 overflow-auto">
           {children}
         </main>

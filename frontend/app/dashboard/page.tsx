@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase';
 import OpportunityCard from '@/components/OpportunityCard';
+import OpportunityOfDay from '@/components/OpportunityOfDay';
+import StreakBanner from '@/components/StreakBanner';
 import type { Opportunity } from '@/types';
 import { RefreshCw, Filter, TrendingUp, Zap, Activity, ChevronDown, X } from 'lucide-react';
 
