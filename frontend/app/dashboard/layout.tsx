@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         lg:translate-x-0 lg:static lg:flex
       `}>
         {/* Logo */}
-        <div className="h-14 flex items-center px-4 border-b border-border-dim gap-2 flex-shrink-0">
+        <div className="h-14 flex items-center px-5 border-b border-border-dim gap-2 flex-shrink-0">
           <img src="/logo.svg" alt="ArbitraxAI" className="h-8 w-auto" />
           <div className="ml-auto flex items-center gap-1">
             <div className="w-1.5 h-1.5 bg-accent-green rounded-full animate-pulse" />
