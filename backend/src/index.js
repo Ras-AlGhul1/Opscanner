@@ -6,6 +6,8 @@ const rateLimit = require('express-rate-limit');
 
 const opportunitiesRouter = require('./routes/opportunities');
 const { startScanner } = require('./services/scanner');
+const { startExecutor } = require('./services/executor');
+const tradesRouter    = require('./routes/trades');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +31,7 @@ app.use('/api/', limiter);
 
 // Routes
 app.use('/api/opportunities', opportunitiesRouter);
+app.use('/api/trades', tradesRouter);
 
 // Health check — Fix 6: removed uptime to avoid info leakage
 app.get('/health', (req, res) => {
@@ -49,6 +52,7 @@ app.listen(PORT, () => {
 
   // Start the AI scanner service
   startScanner();
+startExecutor();
   console.log('🤖 AI Scanner service started');
 });
 

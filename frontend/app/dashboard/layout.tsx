@@ -3,22 +3,25 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
-import { Activity, LayoutDashboard, Bookmark, LogOut, User, ChevronDown, Menu, X, Bell } from 'lucide-react';
+import { Activity, LayoutDashboard, Bookmark, LogOut, User, ChevronDown, Menu, X, Bell, Zap, BarChart2, Clock } from 'lucide-react';
 import LiveTicker from '@/components/LiveTicker';
 
 const NAV_LINKS = [
-  { href: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Live Feed' },
-  { href: '/dashboard/saved',  icon: <Bookmark size={18} />, label: 'Saved' },
-  { href: '/dashboard/alerts', icon: <Bell size={18} />,     label: 'Alerts' },
+  { href: '/dashboard',                  icon: <LayoutDashboard size={18} />, label: 'Live Feed',     group: 'scanner' },
+  { href: '/dashboard/saved',            icon: <Bookmark size={18} />,        label: 'Saved',         group: 'scanner' },
+  { href: '/dashboard/alerts',           icon: <Bell size={18} />,            label: 'Alerts',        group: 'scanner' },
+  { href: '/dashboard/auto-trade',       icon: <Zap size={18} />,             label: 'Auto-Trade',    group: 'trading' },
+  { href: '/dashboard/portfolio',        icon: <BarChart2 size={18} />,       label: 'Portfolio',     group: 'trading' },
+  { href: '/dashboard/trade-history',    icon: <Clock size={18} />,           label: 'Trade History', group: 'trading' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  const router   = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
 
-  const [user, setUser] = useState<{ email: string; username: string } | null>(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser]           = useState<{ email: string; username: string } | null>(null);
+  const [mobileOpen, setMobileOpen]   = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .eq('id', data.user.id)
         .single();
       setUser({
-        email: data.user.email ?? '',
+        email:    data.user.email ?? '',
         username: profile?.username ?? data.user.email?.split('@')[0] ?? 'User',
       });
     });
@@ -40,6 +43,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     await supabase.auth.signOut();
     router.push('/');
   };
+
+  const scannerLinks = NAV_LINKS.filter(l => l.group === 'scanner');
+  const tradingLinks = NAV_LINKS.filter(l => l.group === 'trading');
 
   return (
     <div className="min-h-screen bg-bg-primary flex">
@@ -60,22 +66,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 p-4 space-y-1">
-          {NAV_LINKS.map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
-                ${pathname === link.href
-                  ? 'bg-accent-green/10 text-accent-green border border-accent-green/20'
-                  : 'text-text-secondary hover:text-white hover:bg-bg-hover'}
-              `}
-            >
-              {link.icon}
-              {link.label}
-            </Link>
-          ))}
+        <nav className="flex-1 p-4 space-y-4 overflow-y-auto">
+          {/* Scanner section */}
+          <div>
+            <div className="text-text-muted text-xs font-mono uppercase tracking-widest px-3 mb-2">Scanner</div>
+            <div className="space-y-1">
+              {scannerLinks.map(link => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+                    ${pathname === link.href
+                      ? 'bg-accent-green/10 text-accent-green border border-accent-green/20'
+                      : 'text-text-secondary hover:text-white hover:bg-bg-hover'}`}
+                >
+                  {link.icon}{link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Auto-Trade section */}
+          <div>
+            <div className="text-text-muted text-xs font-mono uppercase tracking-widest px-3 mb-2 flex items-center gap-2">
+              Auto-Trade
+              <span className="text-accent-green text-xs font-mono border border-accent-green/30 bg-accent-green/10 px-1.5 py-0.5 rounded">NEW</span>
+            </div>
+            <div className="space-y-1">
+              {tradingLinks.map(link => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+                    ${pathname === link.href
+                      ? 'bg-accent-green/10 text-accent-green border border-accent-green/20'
+                      : 'text-text-secondary hover:text-white hover:bg-bg-hover'}`}
+                >
+                  {link.icon}{link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         </nav>
 
         {/* User section */}
@@ -101,8 +134,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 px-4 py-3 text-sm text-accent-red hover:bg-accent-red/10 transition-colors"
                 >
-                  <LogOut size={15} />
-                  Sign Out
+                  <LogOut size={15} />Sign Out
                 </button>
               </div>
             )}
@@ -117,7 +149,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
         <header className="h-14 border-b border-border-dim bg-bg-secondary/50 backdrop-blur flex items-center px-4 gap-4 flex-shrink-0">
           <button
             onClick={() => setMobileOpen(v => !v)}
@@ -125,19 +156,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
-
           <div className="flex-1" />
-
           <div className="flex items-center gap-1 text-text-muted text-xs font-mono">
-            <Bell size={14} />
-            <span>Alerts active</span>
+            <Bell size={14} /><span>Alerts active</span>
           </div>
         </header>
 
         <LiveTicker />
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>
   );
