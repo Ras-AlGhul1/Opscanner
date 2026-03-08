@@ -252,9 +252,6 @@ async function generateBatch() {
 
   opportunities.push(...cryptoOpps);
   opportunities.push(...newsOpps);
-  opportunities.push(generateResell());
-  opportunities.push(generateSportsBet());
-  opportunities.push(generateDiscount());
 
   if (opportunities.length === 0) {
     console.log('[SCANNER] No opportunities generated this cycle');
