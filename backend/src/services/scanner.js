@@ -26,44 +26,115 @@ function americanOdds(decimal) {
   return `${Math.round(-100 / (decimal - 1))}`;
 }
 
+// ─── Sportsbook URL Map ───────────────────────────────────────────────────────
+// Keys match exactly what The Odds API returns in bookmaker.key
+
+const SPORTSBOOK_URLS = {
+  draftkings: {
+    basketball_nba:       'https://sportsbook.draftkings.com/leagues/basketball/nba',
+    americanfootball_nfl: 'https://sportsbook.draftkings.com/leagues/football/nfl',
+    soccer_epl:           'https://sportsbook.draftkings.com/leagues/soccer/epl',
+    default:              'https://sportsbook.draftkings.com',
+  },
+  fanduel: {
+    basketball_nba:       'https://sportsbook.fanduel.com/basketball/nba',
+    americanfootball_nfl: 'https://sportsbook.fanduel.com/football/nfl',
+    soccer_epl:           'https://sportsbook.fanduel.com/soccer/epl',
+    default:              'https://sportsbook.fanduel.com',
+  },
+  betmgm: {
+    basketball_nba:       'https://sports.betmgm.com/en/sports/basketball-7/betting/usa-9/nba-6004',
+    americanfootball_nfl: 'https://sports.betmgm.com/en/sports/football-11/betting/usa-9/nfl-35',
+    soccer_epl:           'https://sports.betmgm.com/en/sports/soccer-4/betting',
+    default:              'https://sports.betmgm.com/en/sports',
+  },
+  caesars: {
+    basketball_nba:       'https://sportsbook.caesars.com/us/nj/bet/basketball',
+    americanfootball_nfl: 'https://sportsbook.caesars.com/us/nj/bet/football',
+    soccer_epl:           'https://sportsbook.caesars.com/us/nj/bet/soccer',
+    default:              'https://sportsbook.caesars.com/us/nj/bet',
+  },
+  bet365: {
+    basketball_nba:       'https://www.bet365.com/#/AS/B18/',
+    americanfootball_nfl: 'https://www.bet365.com/#/AS/B17/',
+    soccer_epl:           'https://www.bet365.com/#/AS/B1/',
+    default:              'https://www.bet365.com',
+  },
+  pointsbet: {
+    basketball_nba:       'https://pointsbet.com/sports/basketball/NBA',
+    americanfootball_nfl: 'https://pointsbet.com/sports/football/NFL',
+    soccer_epl:           'https://pointsbet.com/sports/soccer',
+    default:              'https://pointsbet.com/sports',
+  },
+  unibet: {
+    basketball_nba:       'https://www.unibet.com/betting/sports/basketball/nba',
+    americanfootball_nfl: 'https://www.unibet.com/betting/sports/american-football/nfl',
+    soccer_epl:           'https://www.unibet.com/betting/sports/football/english-premier-league',
+    default:              'https://www.unibet.com/betting',
+  },
+  williamhill: {
+    basketball_nba:       'https://www.williamhill.com/us/bet/basketball/nba',
+    americanfootball_nfl: 'https://www.williamhill.com/us/bet/football/nfl',
+    soccer_epl:           'https://www.williamhill.com/us/bet/soccer',
+    default:              'https://www.williamhill.com/us/bet',
+  },
+  bovada: {
+    default: 'https://www.bovada.lv/sports',
+  },
+  mybookieag: {
+    default: 'https://mybookie.ag/sportsbook',
+  },
+  betrivers: {
+    basketball_nba:       'https://www.betrivers.com/sports/basketball/nba',
+    americanfootball_nfl: 'https://www.betrivers.com/sports/football/nfl',
+    default:              'https://www.betrivers.com/sports',
+  },
+  betfair: {
+    default: 'https://www.betfair.com/sport',
+  },
+  pinnacle: {
+    default: 'https://www.pinnacle.com/en/betting-resources',
+  },
+  twinspires: {
+    default: 'https://www.twinspires.com/sportsbook',
+  },
+};
+
+// Use the title from the API response for display name (already human-readable)
+// Use the key for URL lookup — fall back gracefully if unknown
+function getBookUrl(bookKey, sport) {
+  const book = SPORTSBOOK_URLS[bookKey];
+  if (!book) return null; // null = no link, card won't show broken URL
+  return book[sport] || book.default;
+}
+
 // ─── Explanation Templates ────────────────────────────────────────────────────
 
 function generateExplanation(opp) {
   const meta = opp.metadata || {};
   switch (opp.category) {
     case 'Sports Betting':
-      if (meta.type === 'arbitrage') return `By placing bets on both sides across ${meta.bookA} and ${meta.bookB}, the differing odds create a mathematical guarantee of profit regardless of the result. This works because the two bookmakers have priced the same game differently, leaving a gap you can exploit before they correct it.`;
-      if (meta.type === 'over_under') return `Over/Under bets profit when you correctly predict the combined scoring output of a game. The current odds and team form strongly point toward the ${meta.direction} being hit, making this a high-value play at the current line.`;
-      if (meta.type === 'match_winner') return `This prediction is based on live odds data showing the market currently undervaluing one side. When the implied probability from the odds is lower than the model's estimated win probability, there is a positive expected value bet.`;
-      return `This prediction is based on live odds data and statistical edge. The model has identified a pricing discrepancy that makes this bet more likely to win than the odds suggest.`;
+      if (meta.type === 'arbitrage')
+        return `By placing bets on both sides across ${meta.bookA} and ${meta.bookB}, the differing odds create a mathematical guarantee of profit regardless of the result. The bookmakers have priced the same game differently, leaving a gap you can exploit before they correct it.`;
+      if (meta.type === 'over_under')
+        return `Over/Under bets profit when you correctly predict the combined scoring output of a game. The current live odds and recent form strongly point toward the ${meta.direction}, making this a high-value play at the current line.`;
+      if (meta.type === 'match_winner')
+        return `This prediction is based on live odds data showing the market currently undervaluing one side. When the implied probability from the odds is lower than the true estimated win probability, there is a positive expected value bet worth taking.`;
+      return `This prediction is based on live odds data showing a statistical edge. Acting before the market corrects gives you the best chance of capturing the profit.`;
     case 'Crypto Arbitrage':
-      return `${meta.pair || 'This crypto pair'} is priced differently across exchanges due to varying liquidity and order flow. Buying on the cheaper exchange and selling on the more expensive one captures the spread as profit. Speed matters — these gaps typically close within minutes as bots detect them.`;
+      return `${meta.pair || 'This crypto pair'} is priced differently across exchanges due to varying liquidity and order flow. Buying on the cheaper exchange and selling on the more expensive one captures the spread as profit. These windows typically close within minutes as arbitrage bots detect them.`;
     case 'Product Reselling':
-      return `${meta.product || 'This product'} is currently priced below its true market value. Resellers profit by purchasing at this discounted price and listing on secondary marketplaces like eBay or StockX where demand keeps prices higher. The gap between buy price and resale value is your profit margin after fees.`;
+      return `This product is currently priced below its true market value. Resellers profit by purchasing at this discounted price and listing on secondary marketplaces like eBay or StockX where demand keeps prices higher. The gap between buy price and resale value is your profit margin after fees.`;
     case 'Price Mistakes':
-      return `A pricing error means the retailer has accidentally listed this product far below its actual value. When caught quickly, buyers can purchase at the error price before it is corrected. Many retailers honour these orders once placed. The profit comes from reselling at market value.`;
+      return `A pricing error means the retailer accidentally listed this far below its actual value. When caught quickly, buyers can purchase before it is corrected — many retailers honour these orders once placed. The profit comes from reselling at market value.`;
     case 'Discounts':
-      return `This item is currently ${meta.discountPct ? meta.discountPct + '%' : 'significantly'} below its normal retail price. The profit opportunity comes from personal savings versus paying full price, or buying to resell closer to the standard retail price.`;
+      return `This item is currently ${meta.discountPct ? meta.discountPct + '%' : 'significantly'} below its normal retail price. The profit opportunity comes from personal savings versus paying full price, or buying to resell at closer to the standard retail price.`;
     default:
-      return `Breaking news can move markets before prices fully adjust. Acting on this information early gives you an edge before the broader market catches up and prices in the new information.`;
+      return `Breaking news can move markets before prices fully adjust. Acting on this information early gives you an edge before the broader market prices in the new development.`;
   }
 }
 
 // ─── Sports: The Odds API ─────────────────────────────────────────────────────
-
-const SPORTSBOOK_URLS = {
-  draftkings:   { name: 'DraftKings', basketball_nba: 'https://sportsbook.draftkings.com/leagues/basketball/nba', americanfootball_nfl: 'https://sportsbook.draftkings.com/leagues/football/nfl', soccer_epl: 'https://sportsbook.draftkings.com/leagues/soccer/epl', default: 'https://sportsbook.draftkings.com' },
-  fanduel:      { name: 'FanDuel', basketball_nba: 'https://sportsbook.fanduel.com/basketball/nba', americanfootball_nfl: 'https://sportsbook.fanduel.com/football/nfl', soccer_epl: 'https://sportsbook.fanduel.com/soccer/epl', default: 'https://sportsbook.fanduel.com' },
-  betmgm:       { name: 'BetMGM', default: 'https://sports.betmgm.com/en/sports' },
-  caesars:      { name: 'Caesars', default: 'https://sportsbook.caesars.com/us/nj/bet' },
-  bet365:       { name: 'bet365', basketball_nba: 'https://www.bet365.com/#/AS/B18/', americanfootball_nfl: 'https://www.bet365.com/#/AS/B17/', soccer_epl: 'https://www.bet365.com/#/AS/B1/', default: 'https://www.bet365.com' },
-  pointsbet:    { name: 'PointsBet', default: 'https://pointsbet.com/sports' },
-  unibet:       { name: 'Unibet', default: 'https://www.unibet.com/betting' },
-  williamhill:  { name: 'William Hill', default: 'https://www.williamhill.com/us/bet' },
-};
-
-function getBookName(key) { return SPORTSBOOK_URLS[key]?.name || key; }
-function getBookUrl(key, sport) { const b = SPORTSBOOK_URLS[key]; return b ? (b[sport] || b.default) : 'https://sportsbook.draftkings.com'; }
 
 async function fetchSportsOpportunities() {
   if (!ODDS_API_KEY) { console.warn('[SPORTS] No ODDS_API_KEY'); return []; }
@@ -73,7 +144,7 @@ async function fetchSportsOpportunities() {
 
   for (const sport of sports) {
     const data = await safeFetch(
-      `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h,totals&oddsFormat=decimal&dateFormat=iso`
+      `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${ODDS_API_KEY}&regions=us,uk,eu&markets=h2h,totals&oddsFormat=decimal&dateFormat=iso`
     );
     if (!data || !Array.isArray(data)) continue;
 
@@ -83,10 +154,14 @@ async function fetchSportsOpportunities() {
       const books = game.bookmakers || [];
       if (!books.length) continue;
 
-      // Match Winner
+      const league = sport === 'basketball_nba' ? 'NBA'
+        : sport === 'americanfootball_nfl' ? 'NFL' : 'EPL';
+
+      // ── Match Winner ──
       const h2hBooks = books.filter(b => b.markets?.some(m => m.key === 'h2h'));
       if (h2hBooks.length > 0) {
-        const book = h2hBooks[0];
+        // Pick a random bookmaker from the results — not always the first one
+        const book = h2hBooks[Math.floor(Math.random() * h2hBooks.length)];
         const market = book.markets.find(m => m.key === 'h2h');
         if (market) {
           const homeOdds = market.outcomes.find(o => o.name === home)?.price || 2.0;
@@ -95,17 +170,20 @@ async function fetchSportsOpportunities() {
           const odds = Math.min(homeOdds, awayOdds);
           const confidence = Math.min(Math.round(65 + (1 / odds) * 25), 93);
           const profit = parseFloat(rand(80, 400).toFixed(2));
-          const league = sport === 'basketball_nba' ? 'NBA' : sport === 'americanfootball_nfl' ? 'NFL' : 'EPL';
+
+          // Use title from API for display, key for URL
+          const bookName = book.title;
+          const bookUrl = getBookUrl(book.key, sport);
 
           const opp = {
             id: uuidv4(),
             title: `${league} Prediction: ${predicted} to win`,
-            description: `${home} vs ${away} — ${predicted} favoured at ${americanOdds(odds)} on ${getBookName(book.key)}. Live odds via The Odds API.`,
+            description: `${home} vs ${away} — ${predicted} favoured at ${americanOdds(odds)} on ${bookName}. Live odds via The Odds API.`,
             category: 'Sports Betting',
             estimated_profit: profit,
             confidence_score: confidence,
-            source: getBookName(book.key),
-            source_url: getBookUrl(book.key, sport),
+            source: bookName,
+            source_url: bookUrl,
             created_at: new Date().toISOString(),
             metadata: { type: 'match_winner', matchup: `${home} vs ${away}`, predicted, league },
           };
@@ -114,35 +192,37 @@ async function fetchSportsOpportunities() {
         }
       }
 
-      // Arbitrage Detection
+      // ── Arbitrage Detection ──
       if (h2hBooks.length >= 2) {
-        let bestHome = { odds: 0, book: null };
-        let bestAway = { odds: 0, book: null };
+        let bestHome = { odds: 0, bookKey: null, bookName: null };
+        let bestAway  = { odds: 0, bookKey: null, bookName: null };
+
         for (const book of h2hBooks) {
           const market = book.markets.find(m => m.key === 'h2h');
           if (!market) continue;
           const ho = market.outcomes.find(o => o.name === home)?.price || 0;
           const ao = market.outcomes.find(o => o.name === away)?.price || 0;
-          if (ho > bestHome.odds) bestHome = { odds: ho, book: book.key };
-          if (ao > bestAway.odds) bestAway = { odds: ao, book: book.key };
+          if (ho > bestHome.odds) bestHome = { odds: ho, bookKey: book.key, bookName: book.title };
+          if (ao > bestAway.odds) bestAway = { odds: ao, bookKey: book.key, bookName: book.title };
         }
-        if (bestHome.book && bestAway.book && bestHome.book !== bestAway.book) {
+
+        if (bestHome.bookKey && bestAway.bookKey && bestHome.bookKey !== bestAway.bookKey) {
           const implied = (1 / bestHome.odds) + (1 / bestAway.odds);
           if (implied < 1.0) {
             const arbPct = ((1 - implied) * 100).toFixed(2);
             const profit = parseFloat(((1 - implied) * 1000).toFixed(2));
-            const league = sport === 'basketball_nba' ? 'NBA' : sport === 'americanfootball_nfl' ? 'NFL' : 'EPL';
+
             const opp = {
               id: uuidv4(),
               title: `Real Arbitrage: ${home} vs ${away} (${league})`,
-              description: `${getBookName(bestHome.book)} offers ${home} at ${americanOdds(bestHome.odds)} and ${getBookName(bestAway.book)} offers ${away} at ${americanOdds(bestAway.odds)}. ${arbPct}% guaranteed profit on $1,000 stake — mathematically risk-free.`,
+              description: `${bestHome.bookName} offers ${home} at ${americanOdds(bestHome.odds)} and ${bestAway.bookName} offers ${away} at ${americanOdds(bestAway.odds)}. ${arbPct}% guaranteed profit on $1,000 — mathematically risk-free.`,
               category: 'Sports Betting',
               estimated_profit: profit,
               confidence_score: Math.min(Math.round(80 + parseFloat(arbPct) * 4), 98),
-              source: `${getBookName(bestHome.book)} vs ${getBookName(bestAway.book)}`,
-              source_url: getBookUrl(bestHome.book, sport),
+              source: `${bestHome.bookName} vs ${bestAway.bookName}`,
+              source_url: getBookUrl(bestHome.bookKey, sport),
               created_at: new Date().toISOString(),
-              metadata: { type: 'arbitrage', matchup: `${home} vs ${away}`, bookA: getBookName(bestHome.book), bookB: getBookName(bestAway.book), league },
+              metadata: { type: 'arbitrage', matchup: `${home} vs ${away}`, bookA: bestHome.bookName, bookB: bestAway.bookName, league },
             };
             opp.explanation = generateExplanation(opp);
             opportunities.push(opp);
@@ -150,7 +230,7 @@ async function fetchSportsOpportunities() {
         }
       }
 
-      // Over/Under
+      // ── Over/Under ──
       const ouBook = books.find(b => b.markets?.some(m => m.key === 'totals'));
       if (ouBook) {
         const market = ouBook.markets.find(m => m.key === 'totals');
@@ -159,15 +239,15 @@ async function fetchSportsOpportunities() {
           const line = overOutcome.point;
           const odds = overOutcome.price || 1.9;
           const isOver = odds <= 1.95;
-          const league = sport === 'basketball_nba' ? 'NBA' : sport === 'americanfootball_nfl' ? 'NFL' : 'EPL';
+
           const opp = {
             id: uuidv4(),
             title: `${league} O/U: ${home} vs ${away} — ${isOver ? 'OVER' : 'UNDER'} ${line}`,
-            description: `Total line set at ${line} on ${getBookName(ouBook.key)}. Live data favours the ${isOver ? 'OVER' : 'UNDER'} at ${americanOdds(odds)}.`,
+            description: `Total line at ${line} on ${ouBook.title}. Live data favours the ${isOver ? 'OVER' : 'UNDER'} at ${americanOdds(odds)}.`,
             category: 'Sports Betting',
             estimated_profit: parseFloat(rand(60, 250).toFixed(2)),
             confidence_score: randInt(60, 85),
-            source: getBookName(ouBook.key),
+            source: ouBook.title,
             source_url: getBookUrl(ouBook.key, sport),
             created_at: new Date().toISOString(),
             metadata: { type: 'over_under', matchup: `${home} vs ${away}`, direction: isOver ? 'OVER' : 'UNDER', line, league },
@@ -186,11 +266,11 @@ async function fetchSportsOpportunities() {
 // ─── Crypto: CoinGecko ────────────────────────────────────────────────────────
 
 const EXCHANGES = [
-  { name: 'Binance', url: 'https://www.binance.com/en/trade' },
+  { name: 'Binance',  url: 'https://www.binance.com/en/trade' },
   { name: 'Coinbase', url: 'https://www.coinbase.com/advanced-trade' },
-  { name: 'Kraken', url: 'https://www.kraken.com/trade' },
-  { name: 'Bybit', url: 'https://www.bybit.com/trade/usdt' },
-  { name: 'OKX', url: 'https://www.okx.com/trade-spot' },
+  { name: 'Kraken',   url: 'https://www.kraken.com/trade' },
+  { name: 'Bybit',    url: 'https://www.bybit.com/trade/usdt' },
+  { name: 'OKX',      url: 'https://www.okx.com/trade-spot' },
 ];
 
 async function fetchCryptoOpportunities() {
@@ -298,7 +378,7 @@ async function generateRealBatch() {
   ]);
 
   const all = [...sports, ...crypto, ...news];
-  if (all.length === 0) { console.warn('[SCANNER] No real data returned — check API keys'); return; }
+  if (all.length === 0) { console.warn('[SCANNER] No real data — check API keys'); return; }
 
   const { error } = await supabase.from('opportunities').insert(all);
   if (error) { console.error('[SCANNER] Insert error:', error.message); return; }
