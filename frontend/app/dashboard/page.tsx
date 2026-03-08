@@ -51,10 +51,7 @@ export default function DashboardPage() {
       params.set('sort', sort);
       params.set('limit', '50');
 
-      const url = API_URL
-        const url = null;
-        : null;
-
+      const url = null;
       let data: Opportunity[] = [];
 
       if (url) {
