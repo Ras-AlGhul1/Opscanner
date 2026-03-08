@@ -7,7 +7,8 @@ import { Activity, LayoutDashboard, Bookmark, LogOut, User, ChevronDown, Menu, X
 
 const NAV_LINKS = [
   { href: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Live Feed' },
-  { href: '/dashboard/saved', icon: <Bookmark size={18} />, label: 'Saved' },
+  { href: '/dashboard/saved',  icon: <Bookmark size={18} />, label: 'Saved' },
+  { href: '/dashboard/alerts', icon: <Bell size={18} />,     label: 'Alerts' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -50,7 +51,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       `}>
         {/* Logo */}
         <div className="h-14 flex items-center px-5 border-b border-border-dim gap-2 flex-shrink-0">
-          <img src="/logo.svg" alt="ArbitraxAI" className="h-8 w-auto" />
+          <div className="w-6 h-6 bg-accent-green rounded-sm flex items-center justify-center">
+            <Activity size={14} className="text-bg-primary" />
+          </div>
+          <span className="font-display font-bold text-base tracking-wider text-white">
+            OPP<span className="text-accent-green">SCAN</span>
+          </span>
           <div className="ml-auto flex items-center gap-1">
             <div className="w-1.5 h-1.5 bg-accent-green rounded-full animate-pulse" />
             <span className="text-accent-green text-xs font-mono">LIVE</span>
