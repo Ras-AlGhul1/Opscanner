@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <Activity size={14} className="text-bg-primary" />
           </div>
           <span className="font-display font-bold text-lg tracking-wider text-white">
-            OPPORTUNITY<span className="text-accent-green">SCANNER</span>
+            ARBITRAX<span className="text-accent-green">AI</span>
           </span>
         </Link>
       </nav>
