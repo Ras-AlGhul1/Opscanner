@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const supabase = require('../supabase');
 
 const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY;
+const ODDS_API_KEY = process.env.ODDS_API_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const REGIONS = ['Global', 'US', 'UK', 'EU', 'Asia', 'Australia', 'Canada', 'Nigeria'];
 
@@ -165,6 +166,84 @@ async function fetchRealNewsOpportunities() {
   }
 }
 
+
+// ─── REAL: The Odds API ───────────────────────────────────────
+async function fetchRealSportsBettingOpportunities() {
+  try {
+    const sports = ['americanfootball_nfl', 'basketball_nba', 'soccer_epl', 'basketball_nba'];
+    const sport = pick(sports);
+    const url = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${ODDS_API_KEY}&regions=us,uk,eu&markets=h2h&oddsFormat=american`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`OddsAPI error: ${res.status}`);
+    const data = await res.json();
+    if (!data.length) return [];
+
+    const opportunities = [];
+
+    for (const game of data.slice(0, 4)) {
+      const bookmakers = game.bookmakers;
+      if (!bookmakers || bookmakers.length < 2) continue;
+
+      // Find best odds for each outcome across all bookmakers
+      const outcomes = {};
+      for (const book of bookmakers) {
+        const market = book.markets?.find(m => m.key === 'h2h');
+        if (!market) continue;
+        for (const outcome of market.outcomes) {
+          if (!outcomes[outcome.name] || outcome.price > outcomes[outcome.name].price) {
+            outcomes[outcome.name] = { price: outcome.price, book: book.title };
+          }
+        }
+      }
+
+      const teams = Object.keys(outcomes);
+      if (teams.length < 2) continue;
+
+      // Check for arbitrage: sum of implied probabilities < 1
+      const impliedProbs = teams.map(t => {
+        const odds = outcomes[t].price;
+        return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+      });
+      const totalImplied = impliedProbs.reduce((a, b) => a + b, 0);
+      const arbPercent = ((1 - totalImplied) * 100);
+
+      // Determine region based on sport
+      let region = 'US';
+      if (sport.includes('epl') || sport.includes('soccer')) region = pick(['UK', 'EU', 'Nigeria', 'Global']);
+      else if (sport.includes('nba') || sport.includes('nfl')) region = pick(['US', 'Nigeria']);
+
+      const stake = 500;
+      const estimatedProfit = parseFloat((stake * Math.abs(arbPercent) / 100).toFixed(2));
+      const confidence = arbPercent > 0 ? Math.min(92, Math.round(60 + arbPercent * 10)) : randInt(45, 68);
+
+      const bookA = outcomes[teams[0]].book;
+      const bookB = outcomes[teams[1]]?.book ?? bookA;
+      const oddsA = outcomes[teams[0]].price;
+      const oddsB = outcomes[teams[1]]?.price ?? 0;
+
+      opportunities.push({
+        id: uuidv4(),
+        title: `${arbPercent > 0 ? '🎯 ARB: ' : ''}${teams[0]} vs ${teams[1]}`,
+        description: `${game.sport_title} · ${new Date(game.commence_time).toLocaleDateString()}. ${bookA} offers ${teams[0]} at ${oddsA > 0 ? '+' : ''}${oddsA}${teams[1] ? ` · ${bookB} offers ${teams[1]} at ${oddsB > 0 ? '+' : ''}${oddsB}` : ''}. ${arbPercent > 0 ? `Arbitrage window detected: ${arbPercent.toFixed(2)}% edge on $${stake} stake = ~$${estimatedProfit} guaranteed profit.` : `Monitor for arbitrage opportunity. Implied probability gap: ${((1 - totalImplied) * 100).toFixed(2)}%.`}`,
+        category: 'Sports Betting',
+        estimated_profit: Math.max(estimatedProfit, 15),
+        confidence_score: confidence,
+        source: `${bookA}${bookB !== bookA ? ` vs ${bookB}` : ''}`,
+        source_url: `https://the-odds-api.com`,
+        region,
+        created_at: new Date().toISOString(),
+        metadata: { sport, teams, outcomes, totalImplied, arbPercent, gameTime: game.commence_time },
+      });
+    }
+
+    console.log(`[SPORTS] Generated ${opportunities.length} real sports betting opportunities`);
+    return opportunities;
+  } catch (err) {
+    console.error('[SPORTS] Error:', err.message);
+    return [];
+  }
+}
+
 // ─── Simulated fallbacks ───────────────────────────────────────
 const PRODUCTS = [
   { name: 'PlayStation 5', msrp: 499 }, { name: 'RTX 4090', msrp: 1599 },
@@ -245,13 +324,15 @@ function generateDiscount() {
 async function generateBatch() {
   const opportunities = [];
 
-  const [cryptoOpps, newsOpps] = await Promise.all([
+  const [cryptoOpps, newsOpps, sportsOpps] = await Promise.all([
     fetchRealCryptoOpportunities(),
     fetchRealNewsOpportunities(),
+    fetchRealSportsBettingOpportunities(),
   ]);
 
   opportunities.push(...cryptoOpps);
   opportunities.push(...newsOpps);
+  opportunities.push(...sportsOpps);
 
   if (opportunities.length === 0) {
     console.log('[SCANNER] No opportunities generated this cycle');
@@ -264,7 +345,7 @@ async function generateBatch() {
     return;
   }
 
-  console.log(`[SCANNER] Inserted ${opportunities.length} total (${cryptoOpps.length} crypto, ${newsOpps.length} news, 3 simulated)`);
+  console.log(`[SCANNER] Inserted ${opportunities.length} total (${cryptoOpps.length} crypto, ${newsOpps.length} news, ${sportsOpps.length} sports)`);
 }
 
 async function cleanOldOpportunities() {
