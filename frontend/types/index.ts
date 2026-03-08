@@ -1,6 +1,7 @@
 export type Category =
   | 'Sports Betting'
   | 'Crypto Arbitrage'
+  | 'Crypto Trade'
   | 'Product Reselling'
   | 'Price Mistakes'
   | 'Discounts';
@@ -24,9 +25,10 @@ export interface Opportunity {
   confidence_score: number;
   source: string;
   source_url?: string;
-  expires_at?: string;
-  region: Region;
+  expires_at?: string | null;
+  region?: Region;
   created_at: string;
+  explanation?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -44,4 +46,3 @@ export interface UserProfile {
   username: string;
   created_at: string;
 }
-

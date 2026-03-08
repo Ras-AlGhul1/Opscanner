@@ -5,7 +5,7 @@ import OpportunityCard from '@/components/OpportunityCard';
 import type { Opportunity } from '@/types';
 import { RefreshCw, Filter, TrendingUp, Zap, Activity, ChevronDown, X } from 'lucide-react';
 
-const CATEGORIES = ['All', 'Sports Betting', 'Crypto Arbitrage', 'Product Reselling', 'Price Mistakes', 'Discounts'];
+const CATEGORIES = ['All', 'Sports Betting', 'Crypto Arbitrage', 'Crypto Trade', 'Product Reselling', 'Price Mistakes', 'Discounts'];
 
 const SORT_OPTIONS = [
   { value: 'oldest',     label: 'Oldest First' },
@@ -448,6 +448,7 @@ export default function DashboardPage() {
               isSaved={savedIds.has(opp.id)}
               onToggleSave={handleToggleSave}
               isNew={newIds.has(opp.id)}
+              onExpired={(id) => setOpportunities(prev => prev.filter(o => o.id !== id))}
             />
           ))}
         </div>
