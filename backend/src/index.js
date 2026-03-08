@@ -30,19 +30,15 @@ app.use('/api/', limiter);
 // Routes
 app.use('/api/opportunities', opportunitiesRouter);
 
-// Health check
+// Health check — Fix 6: removed uptime to avoid info leakage
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 
-// Error handler
+// Error handler — Fix 4: never leak internal error details
 app.use((err, req, res, next) => {
   console.error('[ERROR]', err.message);
   res.status(500).json({ error: 'Internal server error' });
